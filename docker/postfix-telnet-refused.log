@@ -1,0 +1,4 @@
+Ngày 2: Lỗi telnet Connection refused
+Lỗi: telnet localhost 25 Connection refused
+Giải pháp: Map cổng 25 trong Portainer, tắt postscreen trong master.cf
+Trạng thái: [OK hoặc lỗi mới]
