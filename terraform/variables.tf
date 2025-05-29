@@ -1,7 +1,9 @@
+# variables.tf
+
 variable "aws_region" {
   description = "Vùng AWS để triển khai tài nguyên."
   type        = string
-  default     = "us-east-1" # {# KHAI BÁO: Chọn vùng AWS bạn muốn, ví dụ: ap-southeast-1, us-west-2}
+  default     = "us-east-1"
 }
 
 variable "project_name" {
@@ -25,35 +27,29 @@ variable "public_subnet_cidr_block" {
 variable "instance_type_free_tier" {
   description = "Loại EC2 instance phù hợp với Free Tier."
   type        = string
-  default     = "t2.micro" # {# KHAI BÁO: Kiểm tra loại instance Free Tier khả dụng trong vùng của bạn, ví dụ: t3.micro}
+  default     = "t2.micro" 
 }
 
 variable "control_server_ami" {
-  description = "AMI ID cho Control Server (Jenkins, Nagios, n8n)."
+  description = "AMI ID cho Control Server (Jenkins, Nagios, n8n) trong vùng us-east-1."
   type        = string
-  # {# KHAI BÁO: Tìm AMI ID phù hợp trong vùng của bạn. Ví dụ cho Ubuntu 22.04 LTS (Focal) ở us-east-1 (kiểm tra lại): ami-053b0d53c279acc90}
-  # Bạn có thể tìm AMI ID trong AWS Management Console -> EC2 -> AMIs (chọn "Public images" và filter).
-  # Hãy chọn một AMI "Free tier eligible".
-  default = "ami-053b0d53c279acc90" # Ví dụ cho Ubuntu 22.04 ở us-east-1, thay thế nếu cần
+  default = "ami-053b0d53c279acc90" 
 }
 
 variable "nfs_server_ami" {
-  description = "AMI ID cho NFS Server."
+  description = "AMI ID cho NFS Server trong vùng us-east-1."
   type        = string
-  # {# KHAI BÁO: Tương tự như control_server_ami, chọn AMI phù hợp.}
-  default = "ami-053b0d53c279acc90" # Ví dụ cho Ubuntu 22.04 ở us-east-1, thay thế nếu cần
+  default = "ami-053b0d53c279acc90" 
 }
 
 variable "key_pair_name" {
-  description = "Tên của EC2 Key Pair đã tồn tại trong vùng AWS của bạn để truy cập SSH vào instances."
+  description = "Tên của EC2 Key Pair ĐÃ TỒN TẠI trong vùng AWS us-east-1 để truy cập SSH."
   type        = string
-  # {# KHAI BÁO: Tạo một Key Pair trong AWS EC2 Console và nhập tên vào đây, ví dụ: my-aws-keypair}
-  # default     = "my-aws-keypair" # Bỏ comment và thay thế bằng tên key pair của bạn
+  default     = "nguyenp-key-pair"
 }
 
-variable "user_ip_for_ssh" {
-  description = "Địa chỉ IP công cộng của bạn để cho phép truy cập SSH. Tìm IP của bạn tại https://checkip.amazonaws.com/"
+variable "user_ip_for_ssh_override" {
+  description = "GHI ĐÈ IP công cộng tự động phát hiện cho SSH. Nếu để trống, IP hiện tại của máy chạy Terraform sẽ được sử dụng. Nhập dưới dạng 'x.x.x.x/32'."
   type        = string
-  # {# KHAI BÁO: Nhập địa chỉ IP của bạn, ví dụ: "203.0.113.45/32"}
-  # default     = "0.0.0.0/0" # CẢNH BÁO: KHÔNG AN TOÀN cho production. Chỉ dùng để test nhanh.
+  default     = "" # Để trống để ưu tiên IP tự động phát hiện
 }

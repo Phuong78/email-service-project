@@ -23,6 +23,16 @@ resource "aws_iam_role" "control_server_role" {
   }
 }
 
+# Cho Control Server
+resource "aws_iam_role_policy_attachment" "ssm_core_for_control_server" {
+  role       = aws_iam_role.control_server_role.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+}
+
+# (Tùy chọn) Nếu bạn muốn dùng Session Manager cho NFS Server,
+# bạn cần tạo IAM Role và Instance Profile tương tự cho NFS Server rồi gán policy này.
+# Hoặc nếu NFS server không cần quyền gì đặc biệt, bạn có thể gán trực tiếp Instance Profile
+# với role có policy SSM này.
 # Chính sách cho phép quản lý EC2, VPC, S3 (điều chỉnh quyền cụ thể nếu cần)
 resource "aws_iam_role_policy_attachment" "ec2_full_access_for_control_server" {
   role       = aws_iam_role.control_server_role.name
