@@ -213,6 +213,6 @@ steps {
             //        echo "Đã destroy VM do lỗi."
             //     }
             // }
+            }
         }
-    }
-}
+    
