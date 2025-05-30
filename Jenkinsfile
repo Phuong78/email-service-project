@@ -87,18 +87,17 @@ pipeline {
                         echo "Đã tạo file inventory: ${ansibleInventoryFile}"
 
                         dir(env.ANSIBLE_PLAYBOOKS_PATH) {
-                           sh """
-                           echo "Chạy Ansible Playbook từ thư mục: $(pwd)"
-                           ansible-playbook -i ${ansibleInventoryFile} setup_mail_server.yml \
-                               -e "customer_domain=${params.CUSTOMER_DOMAIN}" \
-                               -e "customer_email_user=${params.CUSTOMER_EMAIL_USER}" \
-                               -e "customer_email_password='${params.CUSTOMER_EMAIL_PASSWORD}'" \
-                               -e "nfs_server_ip=${env.NFS_SERVER_IP}" \
-                               -e "nfs_share_path=${env.NFS_SHARE_PATH}" \
-                               -e "nagios_server_private_ip=${env.NAGIOS_SERVER_PRIVATE_IP}" \
-                               -e "target_host_private_ip=${env.CUSTOMER_VM_PRIVATE_IP}" \
-                               -e "target_host_public_ip=${env.CUSTOMER_VM_PUBLIC_IP}"
-                           """
+                         sh """
+ansible-playbook -i '${ansibleInventoryFile}' setup_mail_server.yml \\
+    -e 'customer_domain=${params.CUSTOMER_DOMAIN}' \\
+    -e 'customer_email_user=${params.CUSTOMER_EMAIL_USER}' \\
+    -e 'customer_email_password=${params.CUSTOMER_EMAIL_PASSWORD}' \\
+    -e 'nfs_server_ip=${env.NFS_SERVER_IP}' \\
+    -e 'nfs_share_path=${env.NFS_SHARE_PATH}' \\
+    -e 'nagios_server_private_ip=${env.NAGIOS_SERVER_PRIVATE_IP}' \\
+    -e 'target_host_private_ip=${env.CUSTOMER_VM_PRIVATE_IP}' \\
+    -e 'target_host_public_ip=${env.CUSTOMER_VM_PUBLIC_IP}'
+"""
                         }
                         echo "Đã cấu hình máy chủ cho ${params.CUSTOMER_NAME} bằng Ansible."
                     } // Đóng script của withCredentials
