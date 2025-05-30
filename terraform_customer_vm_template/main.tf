@@ -4,7 +4,7 @@ provider "aws" {
 
 resource "aws_security_group" "customer_vm_sg" {
   name        = "${var.customer_name}-vm-sg"
-  description = "Security group cho máy chủ của khách hàng ${var.customer_name}"
+  description = "Security group for customer VM ${var.customer_name}"
   vpc_id      = data.aws_subnet.selected_subnet.vpc_id // Lấy VPC ID từ subnet
 
   ingress {
