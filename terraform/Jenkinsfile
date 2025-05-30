@@ -3,6 +3,8 @@ pipeline {
     agent any // Hoặc label của agent node nếu bạn có agent riêng (Jenkins controller có Ansible và Terraform)
 
     environment {
+    
+    SSH_CREDENTIALS_ID = 'customer-vm-ssh-key' // ID bạn vừa tạo
         // Biến môi trường dùng chung
         AWS_REGION = 'us-east-1' // Hoặc vùng AWS của bạn
         // Đường dẫn đến thư mục chứa code Terraform mẫu cho VM khách hàng TRÊN JENKINS SERVER
@@ -86,6 +88,25 @@ pipeline {
         }
 
         stage('3. Cấu hình Máy chủ Khách hàng (Ansible)') {
+steps {
+        withCredentials([sshUserPrivateKey(credentialsId: env.SSH_CREDENTIALS_ID, keyFileVariable: 'ANSIBLE_SSH_KEY_FILE')]) {
+            script {
+                // ... (các bước chuẩn bị khác) ...
+                def inventoryContent = """
+                [mail_server_customer]
+                ${env.CUSTOMER_VM_PUBLIC_IP} ansible_user=ubuntu ansible_ssh_private_key_file=${ANSIBLE_SSH_KEY_FILE} ansible_ssh_common_args='-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null'
+                """
+                def ansibleInventoryFile = "${env.WORKSPACE}/${params.CUSTOMER_NAME}_inventory.ini"
+                writeFile file: ansibleInventoryFile, text: inventoryContent
+
+                dir(env.ANSIBLE_PLAYBOOKS_PATH) {
+                   sh """
+                   ansible-playbook -i ${ansibleInventoryFile} setup_mail_server.yml \
+                       -e "customer_domain=${params.CUSTOMER_DOMAIN}" \
+                       # ... (các extra vars khác) ...
+                   """
+                }
+
             when {
                 expression { env.CUSTOMER_VM_PUBLIC_IP != null && env.CUSTOMER_VM_PUBLIC_IP != "" }
             }
