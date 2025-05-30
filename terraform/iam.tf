@@ -1,61 +1,109 @@
-# IAM Role này cho phép EC2 instance (Control Server) có quyền tương tác với các dịch vụ AWS khác
-# Ví dụ: Jenkins chạy trên Control Server có thể dùng Terraform để tạo EC2 cho khách hàng.
+# iam.tf
 
-resource "aws_iam_role" "control_server_role" {
-  name = "${var.project_name}-ControlServer-EC2-Role"
-
+# --- IAM cho Jenkins Server (Trước đây là Control Server) ---
+resource "aws_iam_role" "jenkins_server_role" {
+  name = "${var.project_name}-JenkinsServer-EC2-Role"
   assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Action = "sts:AssumeRole"
-        Effect = "Allow"
-        Principal = {
-          Service = "ec2.amazonaws.com"
-        }
-      }
-    ]
+    Version = "2012-10-17",
+    Statement = [{
+      Action    = "sts:AssumeRole",
+      Effect    = "Allow",
+      Principal = { Service = "ec2.amazonaws.com" }
+    }]
   })
-
-  tags = {
-    Name    = "${var.project_name}-ControlServer-Role"
-    Project = var.project_name
-  }
+  tags = { Name = "${var.project_name}-JenkinsServer-Role" }
 }
 
-# Cho Control Server
-resource "aws_iam_role_policy_attachment" "ssm_core_for_control_server" {
-  role       = aws_iam_role.control_server_role.name
+resource "aws_iam_role_policy_attachment" "jenkins_ssm_core" {
+  role       = aws_iam_role.jenkins_server_role.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+}
+# {# CÂN NHẮC: Jenkins có thể cần thêm quyền (EC2, S3, VPC) nếu nó trực tiếp chạy Terraform/Ansible để tạo VM khách hàng.
+#   Nếu Jenkins chỉ gọi n8n, thì quyền SSM là đủ để bạn truy cập. #}
+# resource "aws_iam_role_policy_attachment" "jenkins_ec2_access" {
+#   role       = aws_iam_role.jenkins_server_role.name
+#   policy_arn = "arn:aws:iam::aws:policy/AmazonEC2FullAccess"
+# }
+
+resource "aws_iam_instance_profile" "jenkins_server_instance_profile" {
+  name = "${var.project_name}-JenkinsServer-Instance-Profile"
+  role = aws_iam_role.jenkins_server_role.name
+  tags = { Name = "${var.project_name}-JenkinsServer-InstanceProfile" }
+}
+
+# --- IAM cho n8n Server ---
+resource "aws_iam_role" "n8n_server_role" {
+  name = "${var.project_name}-n8nServer-EC2-Role"
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [{
+      Action    = "sts:AssumeRole",
+      Effect    = "Allow",
+      Principal = { Service = "ec2.amazonaws.com" }
+    }]
+  })
+  tags = { Name = "${var.project_name}-n8nServer-Role" }
+}
+
+resource "aws_iam_role_policy_attachment" "n8n_ssm_core" {
+  role       = aws_iam_role.n8n_server_role.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+}
+# {# CÂN NHẮC: Nếu n8n workflows cần tương tác với dịch vụ AWS (S3, SES,...), thêm policy tương ứng ở đây #}
+
+resource "aws_iam_instance_profile" "n8n_server_instance_profile" {
+  name = "${var.project_name}-n8nServer-Instance-Profile"
+  role = aws_iam_role.n8n_server_role.name
+  tags = { Name = "${var.project_name}-n8nServer-InstanceProfile" }
+}
+
+# --- IAM cho Nagios Server ---
+resource "aws_iam_role" "nagios_server_role" {
+  name = "${var.project_name}-NagiosServer-EC2-Role"
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [{
+      Action    = "sts:AssumeRole",
+      Effect    = "Allow",
+      Principal = { Service = "ec2.amazonaws.com" }
+    }]
+  })
+  tags = { Name = "${var.project_name}-NagiosServer-Role" }
+}
+
+resource "aws_iam_role_policy_attachment" "nagios_ssm_core" {
+  role       = aws_iam_role.nagios_server_role.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+}
+# {# CÂN NHẮC: Nagios thường không cần nhiều quyền AWS, trừ khi ghi log/metric ra CloudWatch/S3 #}
+
+resource "aws_iam_instance_profile" "nagios_server_instance_profile" {
+  name = "${var.project_name}-NagiosServer-Instance-Profile"
+  role = aws_iam_role.nagios_server_role.name
+  tags = { Name = "${var.project_name}-NagiosServer-InstanceProfile" }
+}
+
+# --- IAM cho NFS Server (Để truy cập qua Session Manager) ---
+resource "aws_iam_role" "nfs_server_role" {
+  name = "${var.project_name}-NFS-Server-EC2-Role"
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [{
+      Action    = "sts:AssumeRole",
+      Effect    = "Allow",
+      Principal = { Service = "ec2.amazonaws.com" }
+    }]
+  })
+  tags = { Name = "${var.project_name}-NFS-Server-Role" }
+}
+
+resource "aws_iam_role_policy_attachment" "nfs_ssm_core" {
+  role       = aws_iam_role.nfs_server_role.name
   policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
 }
 
-# (Tùy chọn) Nếu bạn muốn dùng Session Manager cho NFS Server,
-# bạn cần tạo IAM Role và Instance Profile tương tự cho NFS Server rồi gán policy này.
-# Hoặc nếu NFS server không cần quyền gì đặc biệt, bạn có thể gán trực tiếp Instance Profile
-# với role có policy SSM này.
-# Chính sách cho phép quản lý EC2, VPC, S3 (điều chỉnh quyền cụ thể nếu cần)
-resource "aws_iam_role_policy_attachment" "ec2_full_access_for_control_server" {
-  role       = aws_iam_role.control_server_role.name
-  policy_arn = "arn:aws:iam::aws:policy/AmazonEC2FullAccess" # Cân nhắc tạo policy tùy chỉnh với quyền hạn chế hơn
-}
-
-resource "aws_iam_role_policy_attachment" "vpc_full_access_for_control_server" {
-  role       = aws_iam_role.control_server_role.name
-  policy_arn = "arn:aws:iam::aws:policy/AmazonVPCFullAccess" # Cân nhắc tạo policy tùy chỉnh
-}
-
-resource "aws_iam_role_policy_attachment" "s3_full_access_for_control_server" {
-  role       = aws_iam_role.control_server_role.name
-  policy_arn = "arn:aws:iam::aws:policy/AmazonS3FullAccess" # Cho phép quản lý S3 (ví dụ: Terraform state)
-}
-
-
-resource "aws_iam_instance_profile" "control_server_instance_profile" {
-  name = "${var.project_name}-ControlServer-Instance-Profile"
-  role = aws_iam_role.control_server_role.name
-
-  tags = {
-    Name    = "${var.project_name}-ControlServer-InstanceProfile"
-    Project = var.project_name
-  }
+resource "aws_iam_instance_profile" "nfs_server_instance_profile" {
+  name = "${var.project_name}-NFS-Server-Instance-Profile"
+  role = aws_iam_role.nfs_server_role.name
+  tags = { Name = "${var.project_name}-NFS-Server-InstanceProfile" }
 }
