@@ -1,6 +1,5 @@
 # iam.tf
 
-# --- IAM cho Jenkins Server (Trước đây là Control Server) ---
 resource "aws_iam_role" "jenkins_server_role" {
   name = "${var.project_name}-JenkinsServer-EC2-Role"
   assume_role_policy = jsonencode({
@@ -18,12 +17,28 @@ resource "aws_iam_role_policy_attachment" "jenkins_ssm_core" {
   role       = aws_iam_role.jenkins_server_role.name
   policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
 }
-# {# CÂN NHẮC: Jenkins có thể cần thêm quyền (EC2, S3, VPC) nếu nó trực tiếp chạy Terraform/Ansible để tạo VM khách hàng.
-#   Nếu Jenkins chỉ gọi n8n, thì quyền SSM là đủ để bạn truy cập. #}
-# resource "aws_iam_role_policy_attachment" "jenkins_ec2_access" {
-#   role       = aws_iam_role.jenkins_server_role.name
-#   policy_arn = "arn:aws:iam::aws:policy/AmazonEC2FullAccess"
-# }
+
+# QUAN TRỌNG: Jenkins cần các quyền này để quản lý tài nguyên AWS (tạo VM khách hàng)
+resource "aws_iam_role_policy_attachment" "jenkins_ec2_full_access" {
+  role       = aws_iam_role.jenkins_server_role.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEC2FullAccess"
+}
+
+resource "aws_iam_role_policy_attachment" "jenkins_vpc_full_access" {
+  role       = aws_iam_role.jenkins_server_role.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonVPCFullAccess" # Nếu Jenkins tạo VPC/subnet cho khách hàng
+}
+
+resource "aws_iam_role_policy_attachment" "jenkins_s3_access" { # Nếu Jenkins cần truy cập S3 (lưu state, artifacts)
+  role       = aws_iam_role.jenkins_server_role.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonS3FullAccess" # Cân nhắc giới hạn quyền S3 hơn
+}
+
+#resource "aws_iam_role_policy_attachment" "jenkins_iam_pass_role_access" { # Nếu Jenkins cần gán IAM role cho các instance nó tạo
+#  role = aws_iam_role.jenkins_server_role.name
+#  policy_arn = "arn:aws:iam::aws:policy/IAMPassRole" # Cho phép pass role, có thể cần thêm quyền tạo role/policy nếu Jenkins tự tạo
+#}
+
 
 resource "aws_iam_instance_profile" "jenkins_server_instance_profile" {
   name = "${var.project_name}-JenkinsServer-Instance-Profile"
