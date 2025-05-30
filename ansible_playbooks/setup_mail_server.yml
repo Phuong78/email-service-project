@@ -1,0 +1,147 @@
+# ~/ansible_playbooks/setup_mail_server.yml
+- name: Cấu hình Máy chủ Email cho Khách hàng
+  hosts: mail_server_customer # Tên group trong inventory file mà Jenkins tạo
+  become: yes # Chạy các tác vụ với quyền sudo
+  vars:
+    # Các biến này sẽ được truyền từ Jenkinsfile qua -e "key=value"
+    # customer_domain: "example.com"
+    # customer_email_user: "admin"
+    # customer_email_password: "password"
+    # nfs_server_ip: "1.2.3.4"
+    # nfs_share_path: "/srv/nfs/shared_mail_data"
+    # nagios_server_private_ip: "10.0.x.x"
+    # target_host_private_ip: "10.0.y.y"
+    # target_host_public_ip: "x.x.x.x"
+
+  tasks:
+    - name: Cập nhật apt cache
+      apt:
+        update_cache: yes
+        cache_valid_time: 3600
+
+    - name: Cài đặt các gói cần thiết cho mail server (Postfix, Dovecot)
+      apt:
+        name:
+          - postfix
+          - dovecot-core
+          - dovecot-imapd
+          - dovecot-pop3d
+          - mailutils
+          # Thêm các gói khác nếu cần (ví dụ: opendkim, opendmarc, spamassassin)
+        state: present
+
+    # ----- Cấu hình Postfix (Rất cơ bản, bạn cần tìm hiểu thêm) -----
+    - name: Cấu hình Postfix myhostname
+      debconf:
+        name: postfix
+        question: postfix/mailname
+        value: "{{ customer_domain }}"
+        vtype: string
+      notify: Restart postfix
+
+    - name: Cấu hình Postfix mydestination
+      lineinfile:
+        path: /etc/postfix/main.cf
+        regexp: '^mydestination\s*='
+        line: "mydestination = $myhostname, {{ customer_domain }}, localhost.localdomain, localhost"
+      notify: Restart postfix
+
+    # Thêm nhiều cấu hình Postfix khác ở đây (mynetworks, relayhost, virtual alias maps, etc.)
+
+    # ----- Cấu hình Dovecot (Rất cơ bản) -----
+    - name: Kích hoạt IMAPS và POP3S trong Dovecot
+      lineinfile:
+        path: /etc/dovecot/conf.d/10-master.conf
+        regexp: '#?service imap-login'
+        line: |
+          service imap-login {
+            inet_listener imap {
+              #port = 143
+            }
+            inet_listener imaps {
+              port = 993
+              ssl = yes
+            }
+          }
+      notify: Restart dovecot
+    # Thêm cấu hình cho POP3S tương tự
+
+    - name: Cấu hình mail location cho Dovecot
+      lineinfile:
+        path: /etc/dovecot/conf.d/10-mail.conf
+        regexp: '^mail_location\s*='
+        line: "mail_location = maildir:~/Maildir" # Hoặc mbox:~/mail:INBOX=/var/mail/%u
+      notify: Restart dovecot
+
+    # ----- Tạo User Email -----
+    - name: Tạo user hệ thống cho email
+      user:
+        name: "{{ customer_email_user }}"
+        password: "{{ customer_email_password | password_hash('sha512') }}"
+        shell: /usr/sbin/nologin # Không cho phép login SSH
+        state: present
+        create_home: yes
+        home: "/home/{{ customer_email_user }}" # Hoặc nơi bạn muốn lưu mail nếu không dùng maildir trong home
+
+    # ----- Mount NFS (Tùy chọn, nếu mail data dùng chung) -----
+    - name: Cài đặt nfs-common (client)
+      apt:
+        name: nfs-common
+        state: present
+
+    - name: Tạo thư mục mount point cho NFS
+      file:
+        path: /mnt/shared_mail_data
+        state: directory
+        mode: '0755'
+
+    - name: Mount NFS share
+      mount:
+        path: /mnt/shared_mail_data
+        src: "{{ nfs_server_ip }}:{{ nfs_share_path }}"
+        fstype: nfs
+        opts: "rw,sync" # Tùy chỉnh options
+        state: mounted # Hoặc "present" trong /etc/fstab để tự mount khi reboot
+
+    # ----- Cài đặt Nagios Client (NRPE) -----
+    - name: Cài đặt NRPE server và plugins
+      apt:
+        name:
+          - nagios-nrpe-server
+          - nagios-plugins
+        state: present
+
+    - name: Cấu hình NRPE - cho phép Nagios server kết nối
+      lineinfile:
+        path: /etc/nagios/nrpe.cfg
+        regexp: '^allowed_hosts='
+        line: "allowed_hosts=127.0.0.1,::1,{{ nagios_server_private_ip }}"
+      notify: Restart nrpe
+
+    - name: Kích hoạt một số command check cơ bản của NRPE (ví dụ)
+      lineinfile:
+        path: /etc/nagios/nrpe.cfg
+        regexp: "{{ item.regexp }}"
+        line: "{{ item.line }}"
+      loop:
+        - { regexp: '^#command\[check_users\]=', line: 'command[check_users]=/usr/lib/nagios/plugins/check_users -w 5 -c 10' }
+        - { regexp: '^#command\[check_load\]=', line: 'command[check_load]=/usr/lib/nagios/plugins/check_load -r -w .15,.10,.05 -c .30,.25,.20' }
+        - { regexp: '^#command\[check_hda1\]=', line: 'command[check_hda1]=/usr/lib/nagios/plugins/check_disk -w 20% -c 10% -p /dev/sda1' } # Đổi /dev/sda1 thành root disk thực tế
+        - { regexp: '^#command\[check_zombie_procs\]=', line: 'command[check_zombie_procs]=/usr/lib/nagios/plugins/check_procs -w 5 -c 10 -s Z' }
+        - { regexp: '^#command\[check_total_procs\]=', line: 'command[check_total_procs]=/usr/lib/nagios/plugins/check_procs -w 150 -c 200' }
+      notify: Restart nrpe
+    # Bạn cần thêm nhiều command check hơn cho dịch vụ mail (Postfix, Dovecot status, mail queue, etc.)
+
+  handlers:
+    - name: Restart postfix
+      service:
+        name: postfix
+        state: restarted
+    - name: Restart dovecot
+      service:
+        name: dovecot
+        state: restarted
+    - name: Restart nrpe
+      service:
+        name: nagios-nrpe-server
+        state: restarted

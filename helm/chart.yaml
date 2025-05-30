@@ -1,4 +1,0 @@
-# Helm chart mẫu
-apiVersion: v2
-name: email-service
-version: 0.1.0
